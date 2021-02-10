@@ -14,7 +14,7 @@ app.use(helmet())
 
 app.use('/articles', articlesRouter)
 
-app.get('xss', (req, res) => {
+app.get('/xss', (req, res) => {
   res.cookie('secretToken', '1234567890');
   res.sendFile(__dirname + '/xss-example.html')
 })

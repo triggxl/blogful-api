@@ -22,7 +22,7 @@ articlesRouter
     for (const [key, value] of Object.entries(newArticle)) {
       if (value == null) {
         return res.status(400).json({
-          error: { message: `Missing ${key} in request body` }
+          error: { message: `Missing '${key}' in request body` }
         })
       }
     }
