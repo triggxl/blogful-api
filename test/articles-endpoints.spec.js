@@ -23,7 +23,7 @@ describe('Articles Endpoints', function () {
     context(`Given no articles`, () => {
       it(`responds with 200 and an empty list`, () => {
         return supertest(app)
-          .get('/articles')
+          .get('/api/articles')
           .expect(200, [])
       })
     })
@@ -39,7 +39,7 @@ describe('Articles Endpoints', function () {
 
       it('responds with 200 and all of the articles', () => {
         return supertest(app)
-          .get('/articles')
+          .get('/api/articles')
           .expect(200, testArticles)
       })
     })
@@ -55,7 +55,7 @@ describe('Articles Endpoints', function () {
 
       it('removes XSS attack content', () => {
         return supertest(app)
-          .get(`/articles`)
+          .get(`/api/articles`)
           .expect(200)
           .expect(res => {
             expect(res.body[0].title).to.eql(expectedArticle.title)
@@ -70,7 +70,7 @@ describe('Articles Endpoints', function () {
       it(`responds with 404`, () => {
         const articleId = 123456
         return supertest(app)
-          .get(`/articles/${articleId}`)
+          .get(`/api/articles/${articleId}`)
           .expect(404, { error: { message: `Article doesn't exist` } })
       })
     })
@@ -88,7 +88,7 @@ describe('Articles Endpoints', function () {
         const articleId = 2
         const expectedArticle = testArticles[articleId - 1]
         return supertest(app)
-          .get(`/articles/${articleId}`)
+          .get(`/api/articles/${articleId}`)
           .expect(200, expectedArticle)
       })
     })
@@ -104,7 +104,7 @@ describe('Articles Endpoints', function () {
 
       it('removes XSS attack content', () => {
         return supertest(app)
-          .get(`/articles/${maliciousArticle.id}`)
+          .get(`/api/articles/${maliciousArticle.id}`)
           .expect(200)
           .expect(res => {
             expect(res.body.title).to.eql(expectedArticle.title)
@@ -122,9 +122,9 @@ describe('Articles Endpoints', function () {
         style: 'Listicle',
         content: 'Test new article content...'
       }
-      console.log('POST /articles', res.body)
+      // process.on('uncaughtException', unhandledExceptionCallback);
       return supertest(app)
-        .post('/articles')
+        .post('/api/articles')
         .send(newArticle)
         .expect(201)
         .expect(res => {
@@ -139,7 +139,7 @@ describe('Articles Endpoints', function () {
         })
         .then(res =>
           supertest(app)
-            .get(`/articles/${res.body.id}`)
+            .get(`/api/articles/${res.body.id}`)
             .expect(res.body)
         )
     })
@@ -155,9 +155,8 @@ describe('Articles Endpoints', function () {
 
       it(`responds with 400 and an error message when the '${field}' is missing`, () => {
         delete newArticle[field]
-
         return supertest(app)
-          .post('/articles')
+          .post('/api/articles')
           .send(newArticle)
           .expect(400, {
             error: { message: `Missing '${field}' in request body` }
@@ -167,15 +166,128 @@ describe('Articles Endpoints', function () {
 
     it('removes XSS attack content from response', () => {
       const { maliciousArticle, expectedArticle } = makeMaliciousArticle()
-      console.log('XSS', res.body)
+      // process.on('uncaughtException', unhandledExceptionCallback);
+      // https://stackoverflow.com/questions/34699457/how-do-i-get-the-actual-server-error-when-running-supertest-in-mocha
       return supertest(app)
-        .post(`/articles`)
+        .post(`/api/articles`)
         .send(maliciousArticle)
         .expect(201)
         .expect(res => {
           expect(res.body.title).to.eql(expectedArticle.title)
           expect(res.body.content).to.eql(expectedArticle.content)
         })
+    })
+  })
+
+  describe(`DELETE /api/articels/:articel_id`, () => {
+    context(`Given no articles`, () => {
+      it(`responds with 404`, () => {
+        const articleId = 12345
+        return supertest(app)
+          .delete(`/api/articels/${articleId}`)
+          .expect(404, { error: { message: `Article doesn't exist` } })
+      })
+      context('Given there are articles in the database', () => {
+        const testArticles = makeArticlesArray()
+
+        beforeEach('insert articles', () => {
+          return db
+            .into('blogful_articles')
+            .insert(testArticles)
+        })
+
+        it('responds with 204 and removes the article', () => {
+          const idToRemove = 2
+          const expectedArticles = testArticles.filter(article => article.id !== idToRemove)
+          return supertest(app)
+            .delete(`/api/articles/${idToRemove}`)
+            .expect(204)
+            .then(res =>
+              supertest(app)
+                .get(`/api/articles`)
+                .expect(expectedArticles)
+            )
+        })
+      })
+    })
+
+    describe(`PATCH /api/articles/:article_id`, () => {
+      context(`Given no articles`, () => {
+        it(`responds with 404`, () => {
+          const articleId = 123456
+          return supertest(app)
+            .delete(`/api/articles/${articleId}`)
+            .expect(404, { error: { message: `Article doesn't exist` } })
+        })
+      })
+
+      context('Given there are articles in the database', () => {
+        const testArticles = makeArticlesArray()
+
+        beforeEach('insert articles', () => {
+          return db
+            .into('blogful_articles')
+            .insert(testArticles)
+        })
+
+        it('responds with 204 and updates the article', () => {
+          const idToUpdate = 2
+          const updateArticle = {
+            title: 'updated article title',
+            style: 'Interview',
+            content: 'updated article content',
+          }
+          const expectedArticle = {
+            ...testArticles[idToUpdate - 1],
+            ...updateArticle
+          }
+          return supertest(app)
+            .patch(`/api/articles/${idToUpdate}`)
+            .send(updateArticle)
+            .expect(204)
+            .then(res =>
+              supertest(app)
+                .get(`/api/articles/${idToUpdate}`)
+                .expect(expectedArticle)
+            )
+        })
+
+        it(`responds with 400 when no required fields supplied`, () => {
+          const idToUpdate = 2
+          return supertest(app)
+            .patch(`/api/articles/${idToUpdate}`)
+            .send({ irrelevantField: 'foo' })
+            .expect(400, {
+              error: {
+                message: `Request body must content either 'title', 'style' or 'content'`
+              }
+            })
+        })
+
+        it(`responds with 204 when updating only a subset of fields`, () => {
+          const idToUpdate = 2
+          const updateArticle = {
+            title: 'updated article title',
+          }
+          const expectedArticle = {
+            ...testArticles[idToUpdate - 1],
+            ...updateArticle
+          }
+
+          return supertest(app)
+            .patch(`/api/articles/${idToUpdate}`)
+            .send({
+              ...updateArticle,
+              fieldToIgnore: 'should not be in GET response'
+            })
+            .expect(204)
+            .then(res =>
+              supertest(app)
+                .get(`/api/articles/${idToUpdate}`)
+                .expect(expectedArticle)
+            )
+        })
+      })
     })
   })
 })
